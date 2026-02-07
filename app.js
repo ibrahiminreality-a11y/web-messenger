@@ -1,17 +1,22 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } 
-from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getAuth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDocs, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  onSnapshot 
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -28,156 +33,102 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+setPersistence(auth, browserLocalPersistence);
+
+const registerBtn = document.getElementById("registerBtn");
+const loginBtn = document.getElementById("loginBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const emailInput = document.getElementById("email");
+const passwordInput = document.getElementById("password");
+const messageInput = document.getElementById("messageInput");
+const sendBtn = document.getElementById("sendBtn");
+const messagesDiv = document.getElementById("messages");
+const authSection = document.getElementById("authSection");
+const chatInputArea = document.getElementById("chatInputArea");
+
 let currentUser = null;
-let selectedUser = null;
-let currentChatId = null;
 
-// REGISTER
-window.register = async function () {
-
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-  const user = userCredential.user;
-
-  await setDoc(doc(db, "users", user.uid), {
-    email: email,
-    online: true
-  });
-
-  alert("User registered successfully!");
+registerBtn.onclick = async () => {
+  try {
+    await createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+    alert("Registration Successful");
+  } catch (error) {
+    alert(error.message);
+  }
 };
 
-// LOGIN
-window.login = async function () {
-
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-
-  const userCredential = await signInWithEmailAndPassword(auth, email, password);
-  const user = userCredential.user;
-
-  currentUser = user;
-
-  await setDoc(doc(db, "users", user.uid), {
-    email: user.email,
-    online: true
-  }, { merge: true });
-
-  document.getElementById("welcomeText").innerText = "Welcome, " + user.email;
-
-  loadUsers();
+loginBtn.onclick = async () => {
+  try {
+    await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+    alert("Login Successful");
+  } catch (error) {
+    alert(error.message);
+  }
 };
 
-// OFFLINE WHEN CLOSE
-window.addEventListener("beforeunload", async () => {
-  if (currentUser) {
-    await setDoc(doc(db, "users", currentUser.uid), {
-      online: false
-    }, { merge: true });
+logoutBtn.onclick = async () => {
+  await signOut(auth);
+};
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    currentUser = user;
+    authSection.style.display = "none";
+    logoutBtn.style.display = "block";
+    messagesDiv.style.display = "block";
+    chatInputArea.style.display = "flex";
+    loadMessages();
+  } else {
+    currentUser = null;
+    authSection.style.display = "flex";
+    logoutBtn.style.display = "none";
+    messagesDiv.style.display = "none";
+    chatInputArea.style.display = "none";
+    messagesDiv.innerHTML = "";
   }
 });
 
-// LOAD USERS (REAL-TIME)
-function loadUsers() {
+sendBtn.onclick = async () => {
+  if (!messageInput.value.trim()) return;
 
-  const userListDiv = document.getElementById("userList");
-
-  onSnapshot(collection(db, "users"), (snapshot) => {
-
-    userListDiv.innerHTML = "";
-
-    snapshot.forEach((docSnap) => {
-
-      const userData = docSnap.data();
-
-      if (currentUser && userData.email !== currentUser.email) {
-
-        const div = document.createElement("div");
-
-        let status = userData.online ? "🟢 Online" : "⚪ Offline";
-
-        div.innerHTML = `
-          <div>${userData.email}</div>
-          <small>${status}</small>
-        `;
-
-        div.classList.add("user-item");
-
-        div.onclick = () => openChat(docSnap.id, userData.email);
-
-        userListDiv.appendChild(div);
-      }
-    });
+  await addDoc(collection(db, "messages"), {
+    text: messageInput.value,
+    uid: currentUser.uid,
+    email: currentUser.email,
+    createdAt: serverTimestamp()
   });
-}
 
-// OPEN CHAT
-function openChat(userId, email) {
-
-  selectedUser = userId;
-
-  document.getElementById("chatHeader").innerText = email;
-
-  currentChatId = currentUser.uid < userId
-    ? currentUser.uid + "_" + userId
-    : userId + "_" + currentUser.uid;
-
-  loadMessages();
-}
-
-// SEND MESSAGE
-window.sendMessage = async function () {
-
-  const text = document.getElementById("messageInput").value;
-
-  if (!text || !selectedUser) return;
-
-  await addDoc(
-    collection(db, "chats", currentChatId, "messages"),
-    {
-      text: text,
-      sender: currentUser.uid,
-      timestamp: new Date()
-    }
-  );
-
-  document.getElementById("messageInput").value = "";
+  messageInput.value = "";
 };
 
-// REAL-TIME MESSAGES
 function loadMessages() {
-
-  const messagesDiv = document.getElementById("messages");
-  messagesDiv.innerHTML = "";
-
-  const q = query(
-    collection(db, "chats", currentChatId, "messages"),
-    orderBy("timestamp")
-  );
+  const q = query(collection(db, "messages"), orderBy("createdAt"));
 
   onSnapshot(q, (snapshot) => {
-
     messagesDiv.innerHTML = "";
 
     snapshot.forEach((doc) => {
+      const data = doc.data();
+      const msg = document.createElement("div");
 
-      const msg = doc.data();
-      const div = document.createElement("div");
+      msg.style.padding = "10px";
+      msg.style.margin = "5px";
+      msg.style.borderRadius = "12px";
+      msg.style.maxWidth = "70%";
+      msg.style.wordWrap = "break-word";
 
-      div.innerText = msg.text;
-      div.classList.add("message");
-
-      if (msg.sender === currentUser.uid) {
-        div.classList.add("sent");
+      if (data.uid === currentUser.uid) {
+        msg.style.background = "#dcf8c6";
+        msg.style.marginLeft = "auto";
       } else {
-        div.classList.add("received");
+        msg.style.background = "#fff";
       }
 
-      messagesDiv.appendChild(div);
+      msg.innerHTML = `<strong>${data.email}</strong><br>${data.text}`;
+
+      messagesDiv.appendChild(msg);
     });
 
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
   });
-      }
+}
