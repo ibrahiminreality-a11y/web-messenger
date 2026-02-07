@@ -31,6 +31,15 @@
       align-items: center;
     }
 
+    #logoutBtn {
+      display: none;
+      background: red;
+      border: none;
+      padding: 6px 10px;
+      color: white;
+      border-radius: 5px;
+    }
+
     .auth {
       padding: 20px;
       display: flex;
@@ -58,10 +67,11 @@
       overflow-y: auto;
       padding: 10px;
       background: #ece5dd;
+      display: none;
     }
 
     .chat-input {
-      display: flex;
+      display: none;
       padding: 10px;
       background: white;
     }
@@ -80,15 +90,6 @@
       border: none;
       border-radius: 5px;
     }
-
-    #logoutBtn {
-      background: red;
-      padding: 5px 10px;
-      border: none;
-      color: white;
-      border-radius: 5px;
-      display: none;
-    }
   </style>
 </head>
 
@@ -98,21 +99,21 @@
 
   <div class="header">
     Ibrahim Messenger
-    <button id="logoutBtn">Logout</button>
+    <button type="button" id="logoutBtn">Logout</button>
   </div>
 
   <div id="authSection" class="auth">
     <input id="email" type="email" placeholder="Email">
     <input id="password" type="password" placeholder="Password">
-    <button id="registerBtn">Register</button>
-    <button id="loginBtn">Login</button>
+    <button type="button" id="registerBtn">Register</button>
+    <button type="button" id="loginBtn">Login</button>
   </div>
 
   <div id="messages"></div>
 
-  <div class="chat-input">
+  <div class="chat-input" id="chatInputArea">
     <input id="messageInput" placeholder="Type a message">
-    <button id="sendBtn">Send</button>
+    <button type="button" id="sendBtn">Send</button>
   </div>
 
 </div>
